@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d D:\\Projects\\applied_health_ai_agent\\backend && .venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --port 8000"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "mcp",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d D:\\Projects\\applied_health_ai_agent\\backend && .venv\\Scripts\\python.exe -m app.mcp.server"
+      ],
+      "port": 8077
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "port": 3000
+    }
+  ]
+}

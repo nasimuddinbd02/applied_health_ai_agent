@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.local
+.env*.local
+.pytest_cache/
+.ruff_cache/
+
+# Local tool settings (keep .claude/launch.json shared)
+.claude/settings.local.json
+
+# SQLite database files (keep the backend/database/ folder via .gitkeep)
+*.db
+!backend/database/.gitkeep
+
+# Eval artifacts
+backend/evals/reports/*.csv
+backend/evals/reports/*.json
+
+# Node / Next
+node_modules/
+.next/
+out/
+next-env.d.ts
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# TS incremental build info
+*.tsbuildinfo
