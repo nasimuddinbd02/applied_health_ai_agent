@@ -1,0 +1,69 @@
+# One hostname for the whole product: the web app at /, the API at /api, and
+# the chat socket at /ws. That is what lets the frontend image be built with
+# NEXT_PUBLIC_API_BASE="" and still work — the browser calls its own origin.
+#
+# The timeouts are the part that matters. A default ingress closes an idle
+# upstream connection after ~60s, which would kill every WebSocket that is
+# quietly waiting for the customer to type. ingress-nginx handles the
+# Upgrade/Connection headers itself, so there is nothing to configure for the
+# handshake — only the read/send timeouts.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cityhospital
+  labels:
+    app.kubernetes.io/name: cityhospital
+  annotations:
+    # An hour of idle time before the proxy gives up on a socket. The
+    # application's own 25s heartbeat keeps healthy connections well inside it,
+    # so hitting this means the peer really is gone.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Chat turns are small; this bounds an abusive upload.
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+    # Sockets must not be cut mid-conversation when the ingress reloads its
+    # config, which it does on every deploy.
+    nginx.ingress.kubernetes.io/worker-shutdown-timeout: "60s"
+    # Deliberately NOT set: session affinity. Redis maps each conversation to
+    # its owning pod, so a reply reaches the right socket without the load
+    # balancer having to remember anything. Affinity would only hide bugs in
+    # that routing (see docs/Design.md section 14).
+    #
+    # TLS via cert-manager — uncomment once an issuer exists in the cluster.
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - cityhospital.example.com
+      secretName: cityhospital-tls
+  rules:
+    - host: cityhospital.example.com
+      http:
+        paths:
+          # Most specific first: ingress-nginx sorts by path length, but being
+          # explicit keeps the intent readable.
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  name: http
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  name: http
+# Note: /health, /health/live, /health/ready and /docs are intentionally NOT
+# routed. They are reachable in-cluster for probes and debugging, and are not
+# part of the public surface.

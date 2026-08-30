@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cityhospital
+
+# `labels` rather than the deprecated `commonLabels`, and deliberately NOT
+# applied to selectors: a Deployment's spec.selector is immutable, so folding
+# extra labels into it would make any future change to this list an
+# unupgradeable resource. Each workload already selects on its own
+# app.kubernetes.io/component.
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/name: cityhospital
+      app.kubernetes.io/part-of: cityhospital
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - migrate-job.yaml
+  - gateway.yaml
+  - worker.yaml
+  - mcp.yaml
+  - web.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - pdb.yaml
+  # secrets.example.yaml is intentionally NOT listed: it is a template, and the
+  # real Secret is created out of band (or by the Key Vault CSI driver).
+
+images:
+  - name: cityhospital-backend
+    newTag: latest
+  - name: cityhospital-web
+    newTag: latest

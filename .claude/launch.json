@@ -2,11 +2,20 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "redis",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "redis-server --port 6379"
+      ],
+      "port": 6379
+    },
+    {
       "name": "backend",
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "cd /d D:\\Projects\\applied_health_ai_agent\\backend && .venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --port 8000"
+        "cd /d D:\\Development\\applied_health_ai_agent\\backend && ..\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --port 8000"
       ],
       "port": 8000
     },
@@ -15,9 +24,17 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "cd /d D:\\Projects\\applied_health_ai_agent\\backend && .venv\\Scripts\\python.exe -m app.mcp.server"
+        "cd /d D:\\Development\\applied_health_ai_agent\\backend && ..\\.venv\\Scripts\\python.exe -m app.mcp.server"
       ],
       "port": 8077
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d D:\\Development\\applied_health_ai_agent\\backend && ..\\.venv\\Scripts\\python.exe -m app.workers.agent_worker"
+      ]
     },
     {
       "name": "frontend",

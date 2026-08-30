@@ -1,0 +1,51 @@
+# Non-secret configuration shared by the gateway, the worker and the MCP server.
+# Secrets (database URL, Redis URL, JWT secret, model keys) live in the Secret,
+# not here — see secrets.example.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+data:
+  # --- Realtime transport -------------------------------------------------
+  WS_HEARTBEAT_SECONDS: "25"
+  WS_MISSED_HEARTBEATS_ALLOWED: "2"
+  WS_MAX_MESSAGE_BYTES: "8192"
+  WS_MAX_CONNECTIONS_PER_SESSION: "4"
+  # A pod that stops heart-beating stops being advertised as a socket owner
+  # after this long. Keep it comfortably above WS_HEARTBEAT_SECONDS.
+  WS_REGISTRY_TTL_SECONDS: "90"
+
+  # --- Abuse limits, per chat session -------------------------------------
+  CHAT_RATE_LIMIT_MESSAGES: "20"
+  CHAT_RATE_LIMIT_WINDOW_SECONDS: "60"
+
+  # --- Event bus (Redis Streams) ------------------------------------------
+  EVENT_STREAM_PREFIX: "events"
+  EVENT_CONSUMER_GROUP: "agent-workers"
+  EVENT_MAX_DELIVERY_ATTEMPTS: "3"
+  # How long an entry may sit unacked before another worker reclaims it. This
+  # is the recovery path for a worker that was killed mid-turn.
+  EVENT_CLAIM_IDLE_MS: "60000"
+
+  # --- Conversation state --------------------------------------------------
+  CONVERSATION_CACHE_TTL_SECONDS: "3600"
+  CONVERSATION_HISTORY_TURNS: "20"
+  IDEMPOTENCY_TTL_SECONDS: "86400"
+  GUEST_SESSION_EXPIRE_MINUTES: "1440"
+
+  # --- Model routing -------------------------------------------------------
+  PROVIDER_PRIORITY: "openai,anthropic,gemini"
+
+  # --- MCP tool server -----------------------------------------------------
+  MCP_HOST: "mcp"
+  MCP_PORT: "8077"
+  MCP_TRANSPORT: "sse"
+
+  REDIS_ENABLED: "true"
+  REDIS_NAMESPACE: "cityhospital"
+
+  # --- CORS ----------------------------------------------------------------
+  # The browser origin allowed to call the API. Overlays override this with the
+  # real hostname; it is here rather than on the container so that an overlay
+  # patch actually takes effect (a container env beats envFrom).
+  FRONTEND_ORIGIN: "http://localhost:3000"

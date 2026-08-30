@@ -1,0 +1,67 @@
+# The agent worker: consumes chat.user_message from the Redis stream, runs the
+# LangGraph agent, and routes the reply back to whichever gateway pod holds the
+# customer's socket.
+#
+# It holds no sockets, so it scales on model latency rather than connection
+# count, and it can be restarted freely: unacked stream entries are reclaimed
+# by another consumer after EVENT_CLAIM_IDLE_MS.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-worker
+  labels:
+    app.kubernetes.io/name: cityhospital
+    app.kubernetes.io/component: agent-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: agent-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cityhospital
+        app.kubernetes.io/component: agent-worker
+    spec:
+      # Enough for an in-flight agent turn to finish rather than be cut off
+      # mid-tool-call and redelivered.
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: worker
+          image: cityhospital-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.workers.agent_worker"]
+          env:
+            # Names this worker's Redis consumer and its Pub/Sub channel.
+            - name: SERVER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          # No HTTP surface, so no HTTP probes. Liveness is the process: if the
+          # consumer loop dies the container exits and Kubernetes restarts it.
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

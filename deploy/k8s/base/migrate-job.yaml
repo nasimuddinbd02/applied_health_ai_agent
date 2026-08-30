@@ -1,0 +1,56 @@
+# Creates the schema before the application rolls out.
+#
+# `python -m app.db.session` only runs create_all — it never deletes anything,
+# so it is safe to re-run on every deploy. (`python -m app.db.seed` DOES wipe
+# every table and is deliberately not wired in here.)
+#
+# The kustomize hash suffix means each apply produces a new Job name rather
+# than failing on an immutable existing one.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-schema
+  labels:
+    app.kubernetes.io/name: cityhospital
+    app.kubernetes.io/component: migrate
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cityhospital
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: migrate
+          image: cityhospital-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.db.session"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

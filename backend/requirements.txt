@@ -3,11 +3,17 @@ fastapi>=0.111
 uvicorn[standard]>=0.30
 python-multipart>=0.0.9
 
-# ORM / DB
+# ORM / DB. SQLite is the default; psycopg is the PostgreSQL driver used in
+# containerised deployments, where more than one pod writes concurrently.
 sqlmodel>=0.0.21
+psycopg[binary]>=3.2
 
 # Config
 pydantic-settings>=2.3
+
+# Realtime coordination: distributed connection metadata, chat sessions,
+# idempotency keys, cross-instance pub/sub and the Streams-based event bus.
+redis>=5.0
 
 # Auth
 bcrypt>=4.0

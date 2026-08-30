@@ -1,0 +1,163 @@
+# The full City Hospital stack, in the production topology.
+#
+#   docker compose up --build
+#   open http://localhost:3000
+#
+# Unlike scripts/dev.ps1 (which runs the agent worker inside the API for
+# convenience), this file runs the split deployment: the gateway holds the
+# sockets, a separate worker consumes the Redis stream, and replies are routed
+# back over Redis Pub/Sub. It is the same shape as the Kubernetes manifests in
+# deploy/k8s, so what you exercise here is what you ship.
+#
+# PostgreSQL rather than SQLite is deliberate: two backend processes write
+# concurrently, and a SQLite file shared between containers is not safe.
+
+name: cityhospital
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://cityhospital:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/cityhospital
+  REDIS_URL: redis://redis:6379/0
+  REDIS_ENABLED: "true"
+  MCP_HOST: mcp
+  MCP_PORT: "8077"
+  FRONTEND_ORIGIN: http://localhost:3000
+  JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+  # Model access. Leave blank to run without a live agent: a turn then ends in
+  # a reported error rather than a fabricated answer.
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+
+x-backend-build: &backend-build
+  context: .
+  dockerfile: docker/backend.Dockerfile
+
+services:
+  # ------------------------------------------------------------------ #
+  # Infrastructure
+  # ------------------------------------------------------------------ #
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cityhospital
+      POSTGRES_USER: cityhospital
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cityhospital -d cityhospital"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # appendonly keeps the event stream across a restart, which is the whole
+    # point of using Streams rather than plain Pub/Sub for agent work.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ #
+  # One-shot: create the schema. Safe to run on every start.
+  # ------------------------------------------------------------------ #
+  migrate:
+    build: *backend-build
+    command: ["python", "-m", "app.db.session"]
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # Demo data, on request only:  docker compose --profile seed run --rm seed
+  # This DELETES every row before inserting, so it is deliberately not part of
+  # the default `up`.
+  seed:
+    profiles: ["seed"]
+    build: *backend-build
+    command: ["python", "-m", "app.db.seed"]
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ------------------------------------------------------------------ #
+  # Application
+  # ------------------------------------------------------------------ #
+  mcp:
+    build: *backend-build
+    command: ["python", "-m", "app.mcp.server"]
+    environment:
+      <<: *backend-env
+      MCP_HOST: 0.0.0.0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  gateway:
+    build: *backend-build
+    environment:
+      <<: *backend-env
+      # The pod/container identity used for Redis connection routing.
+      SERVER_ID: gateway-1
+      # The worker runs as its own service below.
+      INLINE_AGENT_WORKER: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # Long enough for ConnectionManager.drain() to close every socket politely.
+    stop_grace_period: 40s
+    restart: unless-stopped
+
+  worker:
+    build: *backend-build
+    command: ["python", "-m", "app.workers.agent_worker"]
+    environment:
+      <<: *backend-env
+      SERVER_ID: worker-1
+    depends_on:
+      redis:
+        condition: service_healthy
+      mcp:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        # Compose publishes the gateway on a different port from the web app,
+        # so there is no shared origin to fall back to — unlike Kubernetes,
+        # where the ingress puts both on one hostname and these stay empty.
+        NEXT_PUBLIC_API_BASE: http://localhost:8000
+        NEXT_PUBLIC_WS_BASE: ws://localhost:8000
+    environment:
+      # Server Components run inside the network and use service DNS.
+      INTERNAL_API_BASE: http://gateway:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

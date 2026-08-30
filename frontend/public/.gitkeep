@@ -1,0 +1,2 @@
+# Next.js serves everything in this folder from the site root.
+# Kept in git so the Docker build (which copies it) has something to copy.

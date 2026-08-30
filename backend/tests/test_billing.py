@@ -4,9 +4,9 @@ import uuid
 
 import pytest
 
-from app.container import container
-from app.models.entities import today_iso
-from app.providers.billing_provider import BillingError
+from app.core.container import container
+from app.models import today_iso
+from app.services.billing import BillingError
 
 appt = container.appointments
 admin = container.admin

@@ -2,9 +2,9 @@
 
 from fastapi.testclient import TestClient
 
-from app.container import container
+from app.core.container import container
+from app.db.seed import DEFAULT_PASSWORD
 from app.main import app
-from app.seed import DEFAULT_PASSWORD
 
 client = TestClient(app)
 

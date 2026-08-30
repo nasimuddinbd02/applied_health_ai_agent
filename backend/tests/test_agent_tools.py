@@ -3,8 +3,8 @@ without the LLM, so booking logic + guarantees are covered deterministically."""
 
 import pytest
 
-from app.container import container
-from app.mcp import appointment as tools
+from app.core.container import container
+from app.mcp import tools
 
 appt = container.appointments
 

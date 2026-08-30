@@ -25,6 +25,9 @@ node_modules/
 out/
 next-env.d.ts
 
+# Logs from scripts/dev.*
+.dev-logs/
+
 # OS / editor
 .DS_Store
 .idea/

@@ -4,9 +4,9 @@ import uuid
 
 import pytest
 
-from app.container import container
-from app.models.entities import today_iso
-from app.providers.pharmacy_provider import PharmacyError
+from app.core.container import container
+from app.models import today_iso
+from app.services.pharmacy import PharmacyError
 
 pharmacy = container.pharmacy
 appt = container.appointments

@@ -1,0 +1,27 @@
+# Keep the build context small and free of anything environment-specific.
+.git
+.github
+.venv
+venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+node_modules
+.next
+out
+.dev-logs
+*.db
+backend/database/*.db
+**/.env
+**/.env.local
+**/.env*.local
+docs
+**/*.md
+.claude
+.vscode
+.idea
+*.tsbuildinfo
+
+# ...but the frontend needs its public folder, empty or not.
+!frontend/public
