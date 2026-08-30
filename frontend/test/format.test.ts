@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { Formatter } from "../lib/format.ts";
+import { Formatter } from "../src/lib/format.ts";
 
 test("Formatter.usd uses 4 decimal places by default", () => {
   assert.equal(Formatter.usd(0.12345), "$0.1235");

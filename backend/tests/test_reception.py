@@ -2,8 +2,8 @@
 
 from datetime import datetime
 
-from app.container import container
-from app.models.entities import today_iso
+from app.core.container import container
+from app.models import today_iso
 
 reception = container.reception
 appt = container.appointments

@@ -4,8 +4,8 @@ import uuid
 
 import pytest
 
-from app.container import container
-from app.providers.admin_provider import AdminError
+from app.core.container import container
+from app.services.admin import AdminError
 
 admin = container.admin
 auth = container.auth

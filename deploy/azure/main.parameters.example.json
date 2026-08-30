@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": { "value": "cityhosp" },
+    "location": { "value": "westeurope" },
+    "nodeCount": { "value": 2 },
+    "nodeVmSize": { "value": "Standard_D2s_v5" },
+    "postgresAdminUser": { "value": "cityhospital" },
+    "postgresDatabaseName": { "value": "cityhospital" },
+    "postgresAdminPassword": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.KeyVault/vaults/<vault>"
+        },
+        "secretName": "postgres-admin-password"
+      }
+    }
+  }
+}

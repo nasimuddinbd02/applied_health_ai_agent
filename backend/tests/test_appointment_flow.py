@@ -3,8 +3,8 @@ treatment, checkout, and treatment history."""
 
 import pytest
 
-from app.container import container
-from app.providers.appointment_provider import AppointmentError
+from app.core.container import container
+from app.services.appointment import AppointmentError
 
 appt = container.appointments
 

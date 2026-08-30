@@ -1,0 +1,57 @@
+# Self-contained overlay: everything runs in the cluster, nothing in Azure.
+# Suitable for kind, minikube or k3s.
+#
+#   kubectl apply -k deploy/k8s/overlays/local
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cityhospital
+
+resources:
+  - ../../base
+  - redis.yaml
+  - postgres.yaml
+
+# Small cluster: one of each is enough, and it keeps the resource footprint
+# inside a laptop.
+replicas:
+  - name: gateway
+    count: 1
+  - name: agent-worker
+    count: 1
+  - name: web
+    count: 1
+
+patches:
+  # A single-replica PDB with minAvailable 1 would block node drains entirely.
+  - target:
+      kind: PodDisruptionBudget
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 0
+  - target:
+      kind: Ingress
+      name: cityhospital
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: cityhospital.localtest.me
+      - op: remove
+        path: /spec/tls
+
+# Dev-only credentials, generated into a Secret so the overlay stands alone.
+# The AKS overlay does NOT do this — see its kustomization.
+secretGenerator:
+  - name: backend-secrets
+    literals:
+      - DATABASE_URL=postgresql+psycopg://cityhospital:devpassword@postgres:5432/cityhospital
+      - POSTGRES_PASSWORD=devpassword
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=local-dev-secret-not-for-production
+      - OPENAI_API_KEY=
+      - ANTHROPIC_API_KEY=
+      - GEMINI_API_KEY=
+
+generatorOptions:
+  disableNameSuffixHash: true

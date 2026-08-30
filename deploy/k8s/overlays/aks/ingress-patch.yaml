@@ -1,0 +1,47 @@
+# AKS ships ingress-nginx as the managed "application routing" add-on, under
+# its own ingress class. Enable it with:
+#   az aks approuting enable -g <rg> -n <cluster>
+#
+# If you use your own ingress-nginx install instead, delete this patch — the
+# base already uses ingressClassName: nginx.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cityhospital
+  annotations:
+    # Managed by the add-on; cert-manager is the alternative if you bring your
+    # own certificates.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: webapprouting.kubernetes.azure.com
+  tls:
+    - hosts:
+        - cityhospital.example.com
+      secretName: cityhospital-tls
+  rules:
+    - host: cityhospital.example.com
+      http:
+        paths:
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  name: http
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  name: http

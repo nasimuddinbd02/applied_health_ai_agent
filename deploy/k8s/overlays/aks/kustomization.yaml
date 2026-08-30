@@ -1,0 +1,55 @@
+# AKS overlay.
+#
+#   kubectl apply -k deploy/k8s/overlays/aks
+#
+# What changes from the base:
+#   * images point at Azure Container Registry
+#   * the ingress uses the AKS "app routing" add-on's ingress class, and a real
+#     hostname
+#   * Redis and PostgreSQL are Azure managed services, so no in-cluster
+#     StatefulSets are added — their connection strings arrive in the Secret
+#   * the workloads get a workload-identity service account, so the Key Vault
+#     CSI driver can mount secrets without a stored credential
+#
+# The Secret itself is NOT generated here. Create it out of band, or (better)
+# let the Key Vault CSI driver project it — see docs/deployment.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cityhospital
+
+resources:
+  - ../../base
+  - serviceaccount.yaml
+
+# Replace ACR_NAME and the image tag in CI (`kustomize edit set image`), rather
+# than committing a moving `latest` tag to a production overlay.
+images:
+  - name: cityhospital-backend
+    newName: ACR_NAME.azurecr.io/cityhospital-backend
+    newTag: "0.1.0"
+  - name: cityhospital-web
+    newName: ACR_NAME.azurecr.io/cityhospital-web
+    newTag: "0.1.0"
+
+replicas:
+  - name: gateway
+    count: 3
+  - name: agent-worker
+    count: 2
+  - name: web
+    count: 2
+
+patches:
+  - path: ingress-patch.yaml
+  - path: serviceaccount-patch.yaml
+
+# FRONTEND_ORIGIN gates CORS, so it has to match the real hostname.
+configMapGenerator:
+  - name: backend-config
+    behavior: merge
+    literals:
+      - FRONTEND_ORIGIN=https://cityhospital.example.com
+
+generatorOptions:
+  disableNameSuffixHash: true
