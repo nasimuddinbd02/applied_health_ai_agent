@@ -12,11 +12,12 @@ console onboards doctors and builds their schedules from a weekly template.
 | Layer | Stack |
 |---|---|
 | Frontend | **Next.js 14** (App Router, React 18, TypeScript), **Tailwind CSS** with a shadcn/ui-style component library (Radix primitives, CVA, lucide-react icons, sonner toasts), Inter via `next/font` |
-| Backend | **Python / FastAPI**, SQLModel ORM over **SQLite**, JWT auth (`python-jose` + `bcrypt`) |
+| Backend | **Python / FastAPI**, SQLModel ORM over **SQLite** (local) or **PostgreSQL** (containers), JWT auth (`python-jose` + `bcrypt`) |
 | Realtime | **WebSocket** chat gateway (`/ws/chat`) with heartbeat, resume and reconnect; **Redis** for distributed connection metadata, chat sessions, idempotency keys and rate limits |
 | Eventing | **Redis Streams** consumer groups (the Kafka / Azure Event Hubs stand-in) behind an `EventBus` interface, with retry + dead-letter |
 | AI agent | **LangGraph** ReAct agent, tools served by a **FastMCP** server (loaded via `langchain-mcp-adapters`), **LiteLLM** model routing with automatic provider fallback (OpenAI → Anthropic → Gemini) |
 | Testing | `pytest` (111 backend tests, incl. a live-Redis multi-instance suite), Node built-in test runner, `ruff` linting |
+| Deployment | **Docker** (multi-stage, non-root) · **Docker Compose** · **Kubernetes** (kustomize base + overlays) · **Azure** (AKS, ACR, Cache for Redis, PostgreSQL Flexible Server) via **Bicep** |
 
 ## Architecture
 
@@ -56,7 +57,8 @@ lets any instance find the socket that belongs to a given conversation.
                                                          --> the customer
 
   Durable state (survives the socket, the pod and the restart):
-      SQLite/SQLModel - conversations, transcripts, appointments, audit
+      SQLModel - conversations, transcripts, appointments, audit
+      (SQLite locally; PostgreSQL wherever more than one pod writes)
   Coordination state (short-lived, shared, disposable):
       Redis - connection routing, chat sessions, idempotency, rate limits
 ```
@@ -79,7 +81,7 @@ backend/app/
                       ai_gateway, llm
   repositories/       data access — the ONLY place SQL runs (+ the Redis
                       conversation cache)
-  db/                 session.py (engine, sessions, additive migrations),
+  db/                 session.py (engine, sessions, SQLite migrations),
                       seed.py
   models/             SQLModel tables, one module per area
   schemas/            Pydantic request/response DTOs
@@ -112,8 +114,13 @@ section to the code and lists the deliberate differences.
 
 Swapping Redis Streams for Kafka or Azure Event Hubs means implementing
 `app/messaging/event_bus.py:EventBus` and one line in `core/container.py`; nothing
-above that line changes. The same is true of SQLite → PostgreSQL, which is the
-production database [Design.md](docs/Design.md) calls for.
+above that line changes.
+
+PostgreSQL — the production database [Design.md](docs/Design.md) calls for — is
+already supported and is what the container and Kubernetes deployments use;
+`DATABASE_URL` picks the dialect. SQLite stays the default for local work, but
+it cannot be shared by several writing pods, so it is not an option once you
+scale out.
 
 Key guarantees still live in the **data layer**, not the UI: slot booking and
 prescription dispensing are single atomic transactions (no double-booking, no
@@ -203,6 +210,12 @@ actual methods:
 [authentication](docs/process-authentication.md) ·
 [reconnect & resume](docs/process-reconnect-resume.md)
 
+Tracing them turned up real gaps, which are listed rather than quietly papered
+over — reschedule does not exist as an operation, `POST /api/appointments` is
+ungated, patient signup can strand a profile row on a duplicate email, and
+dispensed medicines are never billed. See
+[the open-issues table](docs/Processes.md#open-issues-surfaced-by-writing-these).
+
 ## Feature highlights
 
 - **Booking without friction** — patients pick a day on a date strip and a
@@ -286,6 +299,16 @@ make test-frontend           # frontend unit tests
 make lint                    # ruff
 ```
 
+Copy `.env.example` → `backend/.env` and set an `OPENAI_API_KEY` (and/or
+Anthropic/Gemini — the first configured provider wins, the rest are
+fallbacks). Without a key the app still runs; only the live agent needs one, and
+a turn without one ends in a reported error rather than a fabricated answer.
+
+Redis is optional for a single instance — with it stopped the gateway logs
+`Redis unavailable … degrading to single-instance mode`, `/health` reports
+`"redis": false`, and everything keeps working in-process. It is required as
+soon as you run more than one instance.
+
 ### Containers and Kubernetes
 
 ```bash
@@ -300,16 +323,6 @@ sockets, a separate worker runs the agent — so what you exercise locally is th
 shape that ships. See [docs/deployment.md](docs/deployment.md); note that it
 requires PostgreSQL, because SQLite cannot be shared safely by several writing
 pods.
-
-Copy `.env.example` → `backend/.env` and set an `OPENAI_API_KEY` (and/or
-Anthropic/Gemini — the first configured provider wins, the rest are
-fallbacks). Without a key the app still runs; only the live agent needs one, and
-a turn without one ends in a reported error rather than a fabricated answer.
-
-Redis is optional for a single instance — with it stopped the gateway logs
-`Redis unavailable … degrading to single-instance mode`, `/health` reports
-`"redis": false`, and everything keeps working in-process. It is required as
-soon as you run more than one instance.
 
 ### Rehearsing the production topology
 
